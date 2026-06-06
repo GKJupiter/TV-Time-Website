@@ -90,4 +90,4 @@ It is **not intended as a production-ready application**, but rather as a proof-
 
 ## 📄 License
 
-This project is provided for demonstration and educational purposes.
+This project is provided for demonstration purposes.
