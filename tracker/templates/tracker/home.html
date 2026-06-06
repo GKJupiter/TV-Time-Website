@@ -1,0 +1,86 @@
+{% extends 'tracker/base.html' %}
+{% block content %}
+<h1 style="text-align:center; color:#ffeb3b; font-size:3em; margin-bottom:10px;">Welcome to TVTime</h1>
+<p style="text-align:center; color:#aaa; margin-bottom:40px;">Track your favorite shows.</p>
+
+{% if watching_ids %}
+<h2 style="border-bottom:1px solid #333; padding-bottom:10px; color:#ffeb3b;">New Episodes for You</h2>
+<div class="grid" id="episodesGrid" style="margin-bottom:40px;">
+    <p style="color:#aaa;">Checking for new episodes...</p>
+</div>
+
+<script>
+    const watchingIds = {{ watching_ids|safe }};
+    const grid = document.getElementById('episodesGrid');
+    grid.innerHTML = '';
+    
+    let episodesFound = 0;
+    
+    Promise.all(watchingIds.map(id => 
+        fetch(`https://api.tvmaze.com/shows/${id}?embed=nextepisode`).then(r => r.json())
+    )).then(shows => {
+        shows.forEach(show => {
+            if(show._embedded && show._embedded.nextepisode) {
+                episodesFound++;
+                const ep = show._embedded.nextepisode;
+                const poster = show.image ? show.image.medium : '';
+                const title = show.name;
+                const epName = ep.name;
+                const airdate = ep.airdate;
+                
+                const card = document.createElement('div');
+                card.className = 'card';
+                let imgHtml = poster ? `<img src="${poster}" alt="Poster">` : `<div style="height:300px; background:#222; display:flex; align-items:center; justify-content:center;">No Image</div>`;
+                
+                card.innerHTML = `
+                    ${imgHtml}
+                    <div class="card-info">
+                        <div class="card-title">${title}</div>
+                        <div style="color:#ffeb3b; font-size:14px; margin-top:5px;">Next: ${epName}</div>
+                        <div style="color:#aaa; font-size:12px; margin-top:5px;">Airs: ${airdate}</div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            }
+        });
+        if(episodesFound === 0) {
+            grid.innerHTML = '<p style="color:#aaa; grid-column:1/-1;">No new episodes upcoming for your watched shows.</p>';
+        }
+    });
+</script>
+{% endif %}
+
+<h2 style="border-bottom:1px solid #333; padding-bottom:10px;">New & Most Watched</h2>
+<div class="grid" id="popularGrid">
+    <p style="color:#aaa;">Loading popular shows...</p>
+</div>
+
+<script>
+    fetch('https://api.tvmaze.com/search/shows?q=star')
+    .then(res => res.json())
+    .then(data => {
+        const grid = document.getElementById('popularGrid');
+        grid.innerHTML = '';
+        const shows = data.slice(0, 8);
+        shows.forEach(item => {
+            const poster = item.show.image ? item.show.image.medium : '';
+            const title = item.show.name.replace(/'/g, "\\'");
+            const summary = (item.show.summary || '').replace(/'/g, "\\'");
+            
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.setAttribute('onclick', `openModal('${item.show.id}', '${title}', '${poster}', '${summary}')`);
+            
+            let imgHtml = poster ? `<img src="${poster}" alt="Poster">` : `<div style="height:300px; background:#222; display:flex; align-items:center; justify-content:center;">No Image</div>`;
+            
+            card.innerHTML = `
+                ${imgHtml}
+                <div class="card-info">
+                    <div class="card-title">${item.show.name}</div>
+                </div>
+            `;
+            grid.appendChild(card);
+        });
+    });
+</script>
+{% endblock %}

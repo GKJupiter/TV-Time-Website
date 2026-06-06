@@ -1,0 +1,31 @@
+{% extends 'tracker/base.html' %}
+{% block content %}
+<h1 style="text-align:center; color:#ffeb3b; margin-bottom:40px;">Register</h1>
+<form method="post" style="max-width:400px; margin:0 auto; background:#222; padding:30px; border-radius:12px; border:1px solid #333;">
+    {% csrf_token %}
+    
+    {% if form.non_field_errors %}
+    <div style="color:#f44336; margin-bottom:15px; font-weight:bold;">
+        {% for error in form.non_field_errors %}
+        {{ error }}
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div style="margin-bottom:20px;">
+        <label style="display:block; margin-bottom:5px; color:#aaa; font-weight:bold;">Nickname (Public)</label>
+        <input type="text" name="nickname" required style="width:100%; padding:10px; border-radius:6px; border:1px solid #444; background:#111; color:#fff; box-sizing:border-box;">
+    </div>
+    
+    {% for field in form %}
+    <div style="margin-bottom:20px;">
+        <label style="display:block; margin-bottom:5px; color:#aaa; font-weight:bold;">{{ field.label }} (Private)</label>
+        {{ field }}
+        {% if field.errors %}
+        <div style="color:#f44336; font-size:12px; margin-top:5px;">{{ field.errors.0 }}</div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    <button type="submit" class="btn btn-yellow" style="width:100%; padding:15px; font-size:18px;">Register</button>
+</form>
+{% endblock %}

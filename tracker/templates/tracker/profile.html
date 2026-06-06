@@ -1,0 +1,210 @@
+{% extends 'tracker/base.html' %}
+{% block content %}
+<div style="text-align:center; padding:40px 0; border-bottom:1px solid #333;">
+    <div style="position:relative; width:150px; height:150px; margin:0 auto 20px;">
+        <img id="profileImage" src="{% if user_profile.profile_picture %}{{ user_profile.profile_picture.url }}{% else %}https://api.dicebear.com/7.x/avataaars/svg?seed={{ user_profile.nickname }}{% endif %}" style="width:150px; height:150px; border-radius:50%; object-fit:cover; border:4px solid #ffeb3b; {% if is_owner %}cursor:pointer; transition:opacity 0.3s;{% endif %}" {% if is_owner %}onclick="document.getElementById('picInput').click()" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"{% endif %}>
+        {% if is_owner %}
+        <input type="file" id="picInput" style="display:none;" accept="image/*" onchange="uploadPic(this)">
+        {% endif %}
+    </div>
+    <h1 style="color:#ffeb3b; margin:0 0 10px 0; font-size:2.5em;">@{{ user_profile.nickname }}</h1>
+    
+    <div style="display:flex; justify-content:center; gap:30px; color:#aaa; font-size:18px; margin-bottom:20px;">
+        <div style="cursor:pointer;" onclick="showFollowers()"><strong id="followersCount" style="color:#fff;">{{ user_profile.followers.count }}</strong> Followers</div>
+        <div style="cursor:pointer;" onclick="showFollowing()"><strong style="color:#fff;">{{ user_profile.user.following.count }}</strong> Following</div>
+    </div>
+    
+    <div style="display:flex; justify-content:center; gap:15px;">
+        {% if is_owner %}
+        <button class="btn btn-dark" onclick="shareProfile('{{ user_profile.nickname }}')">🔗 Share Profile</button>
+        {% else %}
+            {% if request.user.is_authenticated %}
+            <button id="followBtn" class="btn {% if is_following %}btn-dark{% else %}btn-yellow{% endif %}" onclick="toggleFollow('{{ user_profile.nickname }}')">
+                {% if is_following %}Unfollow{% else %}Follow{% endif %}
+            </button>
+            {% else %}
+            <a href="/login/" class="btn btn-yellow">Login to Follow</a>
+            {% endif %}
+        {% endif %}
+    </div>
+</div>
+
+<!-- Users Modal -->
+<div id="usersModal" class="modal">
+    <div class="modal-content" style="flex-direction:column; max-width:400px; max-height:80vh; overflow-y:auto;">
+        <span class="close-btn" onclick="closeUsersModal()">&times;</span>
+        <h2 id="usersModalTitle" style="color:#ffeb3b; margin-top:0;">Users</h2>
+        <div id="usersList" style="display:flex; flex-direction:column; gap:15px; margin-top:20px;"></div>
+    </div>
+</div>
+
+<script>
+function shareProfile(nickname) {
+    const url = window.location.origin + '/u/' + nickname + '/';
+    navigator.clipboard.writeText(url).then(() => {
+        const toast = document.getElementById('toast');
+        toast.innerText = 'Profile link copied!';
+        toast.style.display = 'block';
+        setTimeout(() => toast.style.display='none', 3000);
+    });
+}
+
+function toggleFollow(nickname) {
+    fetch('/follow/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({nickname: nickname})
+    }).then(res => res.json()).then(data => {
+        if(data.success) {
+            const btn = document.getElementById('followBtn');
+            const count = document.getElementById('followersCount');
+            count.innerText = data.count;
+            if(data.followed) {
+                btn.className = 'btn btn-dark';
+                btn.innerText = 'Unfollow';
+            } else {
+                btn.className = 'btn btn-yellow';
+                btn.innerText = 'Follow';
+            }
+        }
+    });
+}
+
+{% if is_owner %}
+function uploadPic(input) {
+    if(input.files && input.files[0]) {
+        let formData = new FormData();
+        formData.append('picture', input.files[0]);
+        
+        fetch('/upload_picture/', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: formData
+        }).then(res => res.json()).then(data => {
+            if(data.success) {
+                document.getElementById('profileImage').src = data.url;
+            }
+        });
+    }
+}
+{% endif %}
+
+const followersList = [
+    {% for p in followers_profiles %}
+    { nickname: "{{ p.nickname|escapejs }}", pic: "{% if p.profile_picture %}{{ p.profile_picture.url }}{% else %}https://api.dicebear.com/7.x/avataaars/svg?seed={{ p.nickname }}{% endif %}" },
+    {% endfor %}
+];
+const followingList = [
+    {% for p in following_profiles %}
+    { nickname: "{{ p.nickname|escapejs }}", pic: "{% if p.profile_picture %}{{ p.profile_picture.url }}{% else %}https://api.dicebear.com/7.x/avataaars/svg?seed={{ p.nickname }}{% endif %}" },
+    {% endfor %}
+];
+
+function showUsers(title, list) {
+    document.getElementById('usersModalTitle').innerText = title;
+    const container = document.getElementById('usersList');
+    container.innerHTML = '';
+    if (list.length === 0) {
+        container.innerHTML = '<p style="color:#aaa;">No users found.</p>';
+    } else {
+        list.forEach(u => {
+            container.innerHTML += `
+                <div style="display:flex; align-items:center; gap:15px; cursor:pointer; padding:10px; border-radius:8px; background:#111; border:1px solid #333;" onclick="window.location.href='/u/${u.nickname}/'" onmouseover="this.style.borderColor='#ffeb3b'" onmouseout="this.style.borderColor='#333'">
+                    <img src="${u.pic}" style="width:40px; height:40px; border-radius:50%; object-fit:cover; border:2px solid #ffeb3b;">
+                    <span style="color:#fff; font-weight:bold;">@${u.nickname}</span>
+                </div>
+            `;
+        });
+    }
+    document.getElementById('usersModal').style.display = 'flex';
+}
+
+function showFollowers() { showUsers('Followers', followersList); }
+function showFollowing() { showUsers('Following', followingList); }
+function closeUsersModal() { document.getElementById('usersModal').style.display = 'none'; }
+</script>
+
+<h2 style="margin-top:40px;">Currently Watching</h2>
+<div class="grid">
+    {% for track in watching %}
+    <div class="card" onclick="openModal('{{ track.media.tvmaze_id }}', '{{ track.media.title|escapejs }}', '{{ track.media.poster_url|default:'' }}', '{{ track.media.summary|escapejs }}')">
+        {% if track.media.poster_url %}
+        <img src="{{ track.media.poster_url }}" alt="{{ track.media.title }}">
+        {% else %}
+        <div style="height:300px; background:#222; display:flex; align-items:center; justify-content:center;">No Image</div>
+        {% endif %}
+        <div class="card-info">
+            <div class="card-title">{{ track.media.title }}</div>
+            <div style="color:#aaa; font-size:12px;">Status: {{ track.status }}</div>
+        </div>
+    </div>
+    {% empty %}
+    <p style="color:#666; grid-column:1/-1;">No shows marked as watching.</p>
+    {% endfor %}
+</div>
+
+<h2 style="margin-top:40px; border-top:1px solid #333; padding-top:20px;">Watched</h2>
+<div class="grid">
+    {% for track in watched %}
+    <div class="card" onclick="openModal('{{ track.media.tvmaze_id }}', '{{ track.media.title|escapejs }}', '{{ track.media.poster_url|default:'' }}', '{{ track.media.summary|escapejs }}')">
+        {% if track.media.poster_url %}
+        <img src="{{ track.media.poster_url }}" alt="{{ track.media.title }}">
+        {% else %}
+        <div style="height:300px; background:#222; display:flex; align-items:center; justify-content:center;">No Image</div>
+        {% endif %}
+        <div class="card-info">
+            <div class="card-title">{{ track.media.title }}</div>
+            <div style="color:#aaa; font-size:12px;">Status: {{ track.status }}</div>
+        </div>
+    </div>
+    {% empty %}
+    <p style="color:#666; grid-column:1/-1;">No shows marked as watched.</p>
+    {% endfor %}
+</div>
+
+<h2 style="margin-top:40px; border-top:1px solid #333; padding-top:20px;">Plan to Watch</h2>
+<div class="grid">
+    {% for track in planned %}
+    <div class="card" onclick="openModal('{{ track.media.tvmaze_id }}', '{{ track.media.title|escapejs }}', '{{ track.media.poster_url|default:'' }}', '{{ track.media.summary|escapejs }}')">
+        {% if track.media.poster_url %}
+        <img src="{{ track.media.poster_url }}" alt="{{ track.media.title }}">
+        {% else %}
+        <div style="height:300px; background:#222; display:flex; align-items:center; justify-content:center;">No Image</div>
+        {% endif %}
+        <div class="card-info">
+            <div class="card-title">{{ track.media.title }}</div>
+            <div style="color:#aaa; font-size:12px;">Status: {{ track.status }}</div>
+        </div>
+    </div>
+    {% empty %}
+    <p style="color:#666; grid-column:1/-1;">No shows planned.</p>
+    {% endfor %}
+</div>
+
+<h2 style="margin-top:40px; border-top:1px solid #333; padding-top:20px;">Dropped</h2>
+<div class="grid">
+    {% for track in dropped %}
+    <div class="card" onclick="openModal('{{ track.media.tvmaze_id }}', '{{ track.media.title|escapejs }}', '{{ track.media.poster_url|default:'' }}', '{{ track.media.summary|escapejs }}')">
+        {% if track.media.poster_url %}
+        <img src="{{ track.media.poster_url }}" alt="{{ track.media.title }}">
+        {% else %}
+        <div style="height:300px; background:#222; display:flex; align-items:center; justify-content:center;">No Image</div>
+        {% endif %}
+        <div class="card-info">
+            <div class="card-title">{{ track.media.title }}</div>
+            <div style="color:#aaa; font-size:12px;">Status: {{ track.status }}</div>
+        </div>
+    </div>
+    {% empty %}
+    <p style="color:#666; grid-column:1/-1;">No shows dropped.</p>
+    {% endfor %}
+</div>
+
+<h2 style="margin-top:40px; border-top:1px solid #333; padding-top:20px;">Settings</h2>
+<p style="color:#aaa;">Profile settings go here (Demo only).</p>
+{% endblock %}

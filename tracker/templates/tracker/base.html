@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TVTime</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+        body { background-color: #111; color: #fff; font-family: 'Inter', sans-serif; margin: 0; padding: 0; }
+        .nav { display: flex; justify-content: space-between; padding: 20px 40px; background: #222; align-items: center; border-bottom: 2px solid #333; }
+        .nav-logo { color: #ffeb3b; font-size: 24px; font-weight: bold; text-decoration: none; letter-spacing: 1px; }
+        .nav-search { display: flex; gap: 10px; flex: 1; max-width: 400px; margin: 0 40px; }
+        .nav-search input { flex: 1; padding: 10px; border-radius: 8px; border: 2px solid #333; background: #111; color: #fff; outline: none; }
+        .nav-search input:focus { border-color: #ffeb3b; }
+        .nav-search button { padding: 10px 20px; background: #ffeb3b; color: #000; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; }
+        .nav-links a { color: #fff; text-decoration: none; margin-left: 20px; font-weight: bold; transition: color 0.3s; }
+        .nav-links a:hover { color: #ffeb3b; }
+        .container { max-width: 1000px; margin: 40px auto; padding: 0 20px; }
+        
+        /* Modal Styles */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(5px); }
+        .modal-content { background: #222; padding: 30px; border-radius: 12px; max-width: 600px; width: 90%; border: 1px solid #ffeb3b; position: relative; display: flex; gap: 20px; }
+        .modal-poster { width: 200px; height: 300px; object-fit: cover; border-radius: 8px; background: #111; }
+        .modal-info { flex: 1; display: flex; flex-direction: column; }
+        .close-btn { position: absolute; top: 15px; right: 20px; color: #fff; cursor: pointer; font-size: 24px; }
+        .btn-group { display: flex; gap: 10px; margin-top: auto; flex-wrap: wrap; }
+        .btn { padding: 10px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; flex: 1; min-width: 80px; transition: opacity 0.2s; text-align: center; }
+        .btn-yellow { background: #ffeb3b; color: #000; text-decoration: none; }
+        .btn-dark { background: #444; color: #fff; text-decoration: none; }
+        .btn:hover { opacity: 0.8; }
+        .btn-active { background-color: #4caf50 !important; color: #fff !important; }
+        .btn-active:hover { background-color: #f44336 !important; }
+        .btn-active .text-normal { display: inline; }
+        .btn-active .text-hover { display: none; }
+        .btn-active:hover .text-normal { display: none; }
+        .btn-active:hover .text-hover { display: inline; }
+        .btn:not(.btn-active) .text-hover { display: none; }
+        
+        .toast { position: fixed; bottom: 20px; right: 20px; background: #ffeb3b; color: #000; padding: 15px 25px; border-radius: 8px; font-weight: bold; display: none; z-index: 1001; }
+        
+        /* Grid Styles */
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; }
+        .card { background: rgba(255,255,255,0.05); border-radius: 12px; overflow: hidden; cursor: pointer; border: 1px solid #333; transition: transform 0.3s; }
+        .card:hover { transform: translateY(-5px); border-color: #ffeb3b; }
+        .card img { width: 100%; height: 300px; object-fit: cover; }
+        .card-info { padding: 15px; }
+        .card-title { font-weight: bold; margin-bottom: 5px; color: #ffeb3b; }
+    </style>
+</head>
+<body>
+    <div class="nav">
+        <a href="/" class="nav-logo">📺 TVTime</a>
+        <form class="nav-search" onsubmit="event.preventDefault(); doSearch();">
+            <input type="text" id="searchInput" placeholder="Search shows...">
+            <button type="submit">Search</button>
+        </form>
+        <div class="nav-links" style="display:flex; align-items:center;">
+            <a href="/">Home</a>
+            {% if request.user.is_authenticated %}
+                <a href="/profile/">Profile</a>
+                <form action="/logout/" method="post" style="display:inline; margin-left:20px;">
+                    {% csrf_token %}
+                    <button type="submit" style="background:none; border:none; color:#fff; font-weight:bold; font-size:16px; cursor:pointer; padding:0; transition:color 0.3s;" onmouseover="this.style.color='#ffeb3b'" onmouseout="this.style.color='#fff'">Logout</button>
+                </form>
+            {% else %}
+                <a href="/login/">Login</a>
+                <a href="/register/">Register</a>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="container" id="mainContent">
+        {% block content %}{% endblock %}
+    </div>
+
+    <div class="container" id="searchResults" style="display:none;">
+        <h2 style="color:#ffeb3b; margin-bottom:20px;">Search Results</h2>
+        <div class="grid" id="searchGrid"></div>
+    </div>
+
+    <!-- Global Modal -->
+    <div id="mediaModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal()">&times;</span>
+            <img id="modalPoster" class="modal-poster" src="" alt="Poster">
+            <div class="modal-info">
+                <h2 id="modalTitle" style="color:#ffeb3b; margin-top:0;">Title</h2>
+                <div id="modalSummary" style="color:#ccc; font-size:14px; line-height:1.5; max-height:200px; overflow-y:auto; margin-bottom:20px;">Summary</div>
+                
+                {% if request.user.is_authenticated %}
+                <div class="btn-group" id="modalButtons">
+                    <button class="btn btn-yellow" data-status="Currently Watching" onclick="handleBtnClick('Currently Watching')"><span class="text-normal">Watching</span><span class="text-hover">Remove</span></button>
+                    <button class="btn btn-yellow" data-status="Watched" onclick="handleBtnClick('Watched')"><span class="text-normal">Watched</span><span class="text-hover">Remove</span></button>
+                    <button class="btn btn-dark" data-status="Plan to Watch" onclick="handleBtnClick('Plan to Watch')"><span class="text-normal">Plan</span><span class="text-hover">Remove</span></button>
+                    <button class="btn btn-dark" data-status="Dropped" onclick="handleBtnClick('Dropped')"><span class="text-normal">Dropped</span><span class="text-hover">Remove</span></button>
+                </div>
+                {% else %}
+                <div style="margin-top:auto; color:#ffeb3b; font-weight:bold;">Login to save shows.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast">Saved!</div>
+
+    <script>
+        let currentMedia = null;
+        let currentStatus = null;
+
+        function doSearch() {
+            const query = document.getElementById('searchInput').value;
+            if(!query) return;
+            
+            document.getElementById('mainContent').style.display = 'none';
+            document.getElementById('searchResults').style.display = 'block';
+            document.getElementById('searchGrid').innerHTML = '<p>Loading...</p>';
+            
+            fetch(`https://api.tvmaze.com/search/shows?q=${encodeURIComponent(query)}`)
+            .then(res => res.json())
+            .then(data => {
+                const grid = document.getElementById('searchGrid');
+                grid.innerHTML = '';
+                if(data.length === 0) {
+                    grid.innerHTML = '<p>No shows found.</p>';
+                    return;
+                }
+                data.forEach(item => {
+                    const poster = item.show.image ? item.show.image.medium : '';
+                    const title = item.show.name.replace(/'/g, "\\'");
+                    const summary = (item.show.summary || '').replace(/'/g, "\\'");
+                    
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.setAttribute('onclick', `openModal('${item.show.id}', '${title}', '${poster}', '${summary}')`);
+                    
+                    let imgHtml = poster ? `<img src="${poster}" alt="Poster">` : `<div style="height:300px; background:#222; display:flex; align-items:center; justify-content:center;">No Image</div>`;
+                    
+                    card.innerHTML = `
+                        ${imgHtml}
+                        <div class="card-info">
+                            <div class="card-title">${item.show.name}</div>
+                        </div>
+                    `;
+                    grid.appendChild(card);
+                });
+            });
+        }
+
+        function openModal(id, title, poster, summary) {
+            currentMedia = { id, title, poster, summary };
+            document.getElementById('modalTitle').innerText = title;
+            document.getElementById('modalSummary').innerHTML = summary || 'No summary available.';
+            document.getElementById('modalPoster').src = poster || '';
+            document.getElementById('mediaModal').style.display = 'flex';
+            
+            currentStatus = null;
+            updateButtons();
+
+            {% if request.user.is_authenticated %}
+            fetch('/get_status/?id=' + id)
+            .then(res => res.json())
+            .then(data => {
+                currentStatus = data.status;
+                updateButtons();
+            });
+            {% endif %}
+        }
+        
+        function closeModal() {
+            document.getElementById('mediaModal').style.display = 'none';
+        }
+        
+        function updateButtons() {
+            const btns = document.querySelectorAll('#modalButtons .btn');
+            btns.forEach(btn => {
+                const s = btn.getAttribute('data-status');
+                btn.classList.remove('btn-active');
+                btn.style.backgroundColor = '';
+                btn.style.color = '';
+                
+                if (s === currentStatus) {
+                    btn.classList.add('btn-active');
+                } else {
+                    if (s === 'Currently Watching' || s === 'Watched') {
+                        btn.style.backgroundColor = '#ffeb3b';
+                        btn.style.color = '#000';
+                    } else {
+                        btn.style.backgroundColor = '#444';
+                        btn.style.color = '#fff';
+                    }
+                }
+            });
+        }
+
+        function handleBtnClick(status) {
+            if(!currentMedia) return;
+            let actionStatus = status;
+            if (currentStatus === status) {
+                actionStatus = 'Remove';
+            }
+            fetch('/add/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({
+                    ...currentMedia,
+                    status: actionStatus
+                })
+            }).then(res => res.json()).then(data => {
+                if(data.success) {
+                    if (actionStatus === 'Remove') {
+                        currentStatus = null;
+                    } else {
+                        currentStatus = status;
+                    }
+                    updateButtons();
+                    const toast = document.getElementById('toast');
+                    toast.innerText = actionStatus === 'Remove' ? 'Removed from list!' : actionStatus + ' Saved!';
+                    toast.style.display = 'block';
+                    setTimeout(() => toast.style.display='none', 3000);
+                }
+            });
+        }
+    </script>
+</body>
+</html>

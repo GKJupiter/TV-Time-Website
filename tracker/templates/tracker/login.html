@@ -1,0 +1,14 @@
+{% extends 'tracker/base.html' %}
+{% block content %}
+<div style="max-width: 400px; margin: 40px auto; background: #222; padding: 30px; border-radius: 12px; border: 1px solid #333;">
+    <h1 style="color: #ffeb3b; text-align: center; margin-top: 0;">Login</h1>
+    <form method="POST">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit" class="btn btn-yellow" style="width: 100%; margin-top: 20px;">Sign In</button>
+    </form>
+    <p style="text-align: center; margin-top: 20px;">
+        Don't have an account? <a href="/register/" style="color: #ffeb3b;">Register here</a>.
+    </p>
+</div>
+{% endblock %}
